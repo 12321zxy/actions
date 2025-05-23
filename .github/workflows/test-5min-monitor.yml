@@ -1,0 +1,22 @@
+name: 5-Minute Test Monitoring
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # 每5分钟执行一次
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  check-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 获取当前时间
+        id: current-time
+        run: echo "time=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: 执行链接检查
+        run: |
+          echo "开始执行5分钟测试检查"
+          curl -X POST "${{ secrets.SITE_URL }}/api/check-links" -H "Content-Type: application/json" -d '{"isManualCheck": true, "source": "github_5min_test"}' --fail
+          echo "5分钟测试检查完成"
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
