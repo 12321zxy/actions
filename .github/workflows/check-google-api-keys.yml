@@ -1,0 +1,45 @@
+name: Check Multiple Google API Keys
+
+on:
+  schedule:
+    - cron: '0 * * * *' # 每小时运行一次
+  workflow_dispatch:
+
+jobs:
+  check-keys:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Check Google API Keys and Notify Telegram
+        env:
+          GOOGLE_API_KEYS: ${{ secrets.GOOGLE_API_KEYS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          IFS=',' read -ra KEYS <<< "$GOOGLE_API_KEYS"
+          INVALID_KEYS=""
+          for KEY in "${KEYS[@]}"; do
+            KEY=$(echo $KEY | xargs) # 去除空格
+            curl -s -X POST "https://translation.googleapis.com/language/translate/v2?key=${KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{"q":"test","source":"en","target":"zh","format":"text"}' > result.json
+
+            if grep -q '"translatedText"' result.json; then
+              echo "✅ Key $KEY is valid."
+            else
+              echo "❌ Key $KEY is invalid!"
+              INVALID_KEYS="${INVALID_KEYS}\n$KEY"
+            fi
+          done
+
+          if [ -n "$INVALID_KEYS" ]; then
+            MESSAGE="❌ 以下Google API Key已失效或不可用：$INVALID_KEYS"
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d chat_id="${TELEGRAM_CHAT_ID}" \
+              -d text="$MESSAGE"
+            exit 1
+          else
+            echo "All keys are valid."
+          fi
